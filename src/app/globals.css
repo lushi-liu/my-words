@@ -5,6 +5,32 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-blue-light: #0252cd;
+  --color-blue-dark: #428dff;
+  --color-yellow-primary: #ffbe62;
+  --color-white-900: #ffffff;
+  --color-white-800: #f3f8ff;
+  --color-white-500: #6f74a7;
+  --color-black-200: #151e2c;
+  --color-black-300: #192333;
+  --color-black-400: #778295;
+
+  --font-size-14: 14px;
+  --font-size-18: 18px;
+  --font-size-20: 20px;
+  --font-size-24: 24px;
+  --font-size-32: 32px;
+  --font-size-48: 48px;
+  --font-size-64: 64px;
+
+  --background-image-gradient-radial: radial-gradient(var(--tw-gradient-stops));
+  --background-image-gradient-conic: conic-gradient(
+    from 180deg at 50% 50%,
+    var(--tw-gradient-stops)
+  );
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
