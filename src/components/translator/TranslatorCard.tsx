@@ -6,11 +6,9 @@ import Textarea from '../ui/Textarea';
 import DirectionToggle from './DirectionToggle';
 import kuromoji from 'kuromoji';
 
-// Simple fallback furigana generator if kuromoji not ready
-function simpleFurigana(text: string): string {
-  // Very basic — in real app use kuromoji below
-  return text; // Replace with real logic or show plain
-}
+const hasKanji = (str: string): boolean => {
+  return /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(str);
+};
 
 export default function TranslatorCard() {
   const [direction, setDirection] = useState<'ja-to-en' | 'en-to-ja'>(
@@ -33,7 +31,6 @@ export default function TranslatorCard() {
 
     kuromoji.builder({ dicPath: '/dict' }).build((err: any, tok: any) => {
       if (!mounted) return;
-
       if (err) {
         console.error('Kuromoji load failed:', err);
         setError(
@@ -41,7 +38,6 @@ export default function TranslatorCard() {
         );
         return;
       }
-
       setTokenizer(tok);
       setKuromojiReady(true);
       console.log('Kuromoji tokenizer loaded');
@@ -54,7 +50,7 @@ export default function TranslatorCard() {
 
   const addFurigana = (text: string): string => {
     if (!kuromojiReady || !tokenizer || !text.trim()) {
-      return text; // fallback to plain text
+      return text;
     }
 
     try {
@@ -62,16 +58,16 @@ export default function TranslatorCard() {
       let result = '';
 
       tokens.forEach((token: any) => {
-        const surface = token.surface_form;
+        const surface = token.surface_form || '';
         let reading = token.reading || '';
 
-        // Skip if no useful reading or not kanji/kana mix
-        if (!reading || reading === surface || token.pos_detail_1 === '数') {
+        // Skip if no reading, or reading same as surface (pure kana usually)
+        if (!reading || reading === surface) {
           result += surface;
           return;
         }
 
-        // Clean reading (remove ・ and make hiragana)
+        // Clean reading: hiragana preferred, remove ・
         reading = reading
           .toLowerCase()
           .replace(/・/g, '')
@@ -79,7 +75,12 @@ export default function TranslatorCard() {
             String.fromCharCode(m.charCodeAt(0) - 0x60)
           ); // katakana → hiragana
 
-        result += `<ruby>${surface}<rt>${reading}</rt></ruby>`;
+        // Only apply ruby if surface contains kanji
+        if (hasKanji(surface)) {
+          result += `<ruby>${surface}<rt>${reading}</rt></ruby>`;
+        } else {
+          result += surface;
+        }
       });
 
       return result;
@@ -87,6 +88,10 @@ export default function TranslatorCard() {
       console.warn('Furigana generation failed', e);
       return text;
     }
+  };
+
+  const stripFurigana = (html: string): string => {
+    return html.replace(/<ruby>|<\/ruby>|<rt>.*?<\/rt>/g, '');
   };
 
   const handleTranslate = async () => {
