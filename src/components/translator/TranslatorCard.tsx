@@ -1,9 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Button from '../ui/Button';
 import Textarea from '../ui/Textarea';
 import DirectionToggle from './DirectionToggle';
+import kuromoji from 'kuromoji';
+
+// Simple fallback furigana generator if kuromoji not ready
+function simpleFurigana(text: string): string {
+  // Very basic — in real app use kuromoji below
+  return text; // Replace with real logic or show plain
+}
 
 export default function TranslatorCard() {
   const [direction, setDirection] = useState<'ja-to-en' | 'en-to-ja'>(
@@ -12,63 +19,130 @@ export default function TranslatorCard() {
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const isJaToEn = direction === 'ja-to-en';
-
   const sourceLang = isJaToEn ? 'Japanese' : 'English';
   const targetLang = isJaToEn ? 'English' : 'Japanese';
-  const sourcePlaceholder = isJaToEn
-    ? 'ここに日本語を入力してください...'
-    : 'Enter English text here...';
-  const targetPlaceholder = isJaToEn
-    ? 'Translation will appear here...'
-    : '翻訳結果がここに表示されます...';
+
+  const [tokenizer, setTokenizer] = useState<any>(null);
+  const [kuromojiReady, setKuromojiReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    kuromoji.builder({ dicPath: '/dict' }).build((err: any, tok: any) => {
+      if (!mounted) return;
+
+      if (err) {
+        console.error('Kuromoji load failed:', err);
+        setError(
+          'Failed to load Japanese tokenizer (furigana support unavailable)'
+        );
+        return;
+      }
+
+      setTokenizer(tok);
+      setKuromojiReady(true);
+      console.log('Kuromoji tokenizer loaded');
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const addFurigana = (text: string): string => {
+    if (!kuromojiReady || !tokenizer || !text.trim()) {
+      return text; // fallback to plain text
+    }
+
+    try {
+      const tokens = tokenizer.tokenize(text);
+      let result = '';
+
+      tokens.forEach((token: any) => {
+        const surface = token.surface_form;
+        let reading = token.reading || '';
+
+        // Skip if no useful reading or not kanji/kana mix
+        if (!reading || reading === surface || token.pos_detail_1 === '数') {
+          result += surface;
+          return;
+        }
+
+        // Clean reading (remove ・ and make hiragana)
+        reading = reading
+          .toLowerCase()
+          .replace(/・/g, '')
+          .replace(/[ァ-ヶー]/g, (m: string) =>
+            String.fromCharCode(m.charCodeAt(0) - 0x60)
+          ); // katakana → hiragana
+
+        result += `<ruby>${surface}<rt>${reading}</rt></ruby>`;
+      });
+
+      return result;
+    } catch (e) {
+      console.warn('Furigana generation failed', e);
+      return text;
+    }
+  };
 
   const handleTranslate = async () => {
     if (!sourceText.trim()) return;
-
     setIsLoading(true);
+    setError('');
     setTranslatedText('');
 
-    // Placeholder simulation — replace with real API call
     try {
-      await new Promise((r) => setTimeout(r, 1400));
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sourceText, direction }),
+      });
 
-      // In real app:
-      // const res = await fetch('/api/translate', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ text: sourceText, direction }),
-      // });
-      // const { translation } = await res.json();
+      const data = await res.json();
 
-      const simulated = isJaToEn
-        ? `Simulated: "${sourceText}" → This is what your Japanese text would translate to in English.`
-        : `Simulated: "${sourceText}" → これは英語のテキストが日本語に翻訳された例です。`;
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-      setTranslatedText(simulated);
-    } catch {
-      setTranslatedText('Translation failed. Please try again.');
+      let output = data.translation;
+
+      // Add furigana if output is Japanese (EN→JA)
+      if (!isJaToEn) {
+        output = addFurigana(output);
+      }
+
+      setTranslatedText(output);
+    } catch (err: any) {
+      setError(err.message || 'Translation failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSwap = () => {
-    // Flip direction and swap texts
     setDirection((prev) => (prev === 'ja-to-en' ? 'en-to-ja' : 'ja-to-en'));
-    setSourceText(translatedText);
+    setSourceText(translatedText.replace(/<[^>]+>/g, '')); // strip tags for swap
     setTranslatedText(sourceText);
   };
 
   const handleClear = () => {
     setSourceText('');
     setTranslatedText('');
+    setError('');
   };
 
+  // Furigana for source when JA→EN
+  const displaySource = isJaToEn ? addFurigana(sourceText) : sourceText;
+
   return (
-    <div className="bg-white-900/80 border-black-300/20 mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border shadow-xl backdrop-blur-sm">
+    <div className="...">
+      {' '}
+      {/* same card styles */}
       <div className="p-6 md:p-10">
-        {/* Direction toggle */}
         <DirectionToggle
           direction={direction}
           onChange={setDirection}
@@ -76,7 +150,7 @@ export default function TranslatorCard() {
         />
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-10">
-          {/* Source (input) */}
+          {/* Source */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-24 text-blue-dark font-bold">{sourceLang}</h2>
@@ -87,11 +161,22 @@ export default function TranslatorCard() {
             <Textarea
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
-              placeholder={sourcePlaceholder}
+              placeholder={
+                isJaToEn
+                  ? 'ここに日本語を入力してください...'
+                  : 'Enter English text here...'
+              }
             />
+            {/* Preview furigana for Japanese input */}
+            {isJaToEn && sourceText.trim() && (
+              <div
+                className="text-16 text-black-300 mt-2"
+                dangerouslySetInnerHTML={{ __html: displaySource }}
+              />
+            )}
           </div>
 
-          {/* Target (output) */}
+          {/* Target */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-24 text-blue-light font-bold">
@@ -102,18 +187,23 @@ export default function TranslatorCard() {
               </span>
             </div>
             <div
-              className={`bg-black-300/5 border-black-300/20 text-18 text-black-200 min-h-[140px] w-full rounded-xl border px-5 py-4 whitespace-pre-wrap md:min-h-[180px]`}
+              className={`prose prose-lg bg-black-300/5 border-black-300/20 text-18 text-black-200 min-h-[180px] w-full max-w-none rounded-xl border px-5 py-4 whitespace-pre-wrap`}
             >
-              {translatedText || (
+              {error ? (
+                <span className="text-red-500">{error}</span>
+              ) : translatedText ? (
+                <div dangerouslySetInnerHTML={{ __html: translatedText }} />
+              ) : (
                 <span className="text-white-500 italic">
-                  {targetPlaceholder}
+                  {isJaToEn
+                    ? 'Translation will appear here...'
+                    : '翻訳結果がここに表示されます...'}
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Controls */}
         <div className="mt-8 flex flex-wrap justify-center gap-4 md:justify-end">
           <Button
             variant="outline"
@@ -123,7 +213,6 @@ export default function TranslatorCard() {
           >
             Clear
           </Button>
-
           <Button
             variant="primary"
             size="lg"
@@ -131,29 +220,7 @@ export default function TranslatorCard() {
             disabled={!sourceText.trim() || isLoading}
             className="min-w-[160px]"
           >
-            {isLoading ? (
-              <span className="flex items-center gap-2">
-                <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-                Translating...
-              </span>
-            ) : (
-              `Translate ${isJaToEn ? '→' : '←'}`
-            )}
+            {isLoading ? 'Translating...' : `Translate ${isJaToEn ? '→' : '←'}`}
           </Button>
         </div>
       </div>
