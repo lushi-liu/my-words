@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
+import dns from 'node:dns/promises';
 
 const MONGODB_URI = process.env.MONGODB_URI;
+
+dns.setServers(['1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4']);
 
 if (!MONGODB_URI) {
   throw new Error(
@@ -27,13 +30,12 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      // Optional tuning for Vercel/serverless
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
       console.log('MongoDB connected');
       return mongoose;
     });

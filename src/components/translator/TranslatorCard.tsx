@@ -90,10 +90,6 @@ export default function TranslatorCard() {
     }
   };
 
-  const stripFurigana = (html: string): string => {
-    return html.replace(/<ruby>|<\/ruby>|<rt>.*?<\/rt>/g, '');
-  };
-
   const handleTranslate = async () => {
     if (!sourceText.trim()) return;
     setIsLoading(true);
@@ -128,6 +124,35 @@ export default function TranslatorCard() {
     }
   };
 
+  const handleSaveVocab = async () => {
+    if (!sourceText.trim() || !translatedText.trim()) return;
+
+    const sourceIsJapanese = direction === 'ja-to-en';
+
+    const entry = {
+      english: sourceIsJapanese ? translatedText : sourceText,
+      japanese: sourceIsJapanese ? sourceText : translatedText,
+    };
+
+    try {
+      const res = await fetch('/api/vocab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+
+      if (res.ok) {
+        alert('Saved to vocabulary!');
+      } else {
+        const err = await res.json();
+        alert('Save failed: ' + err.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error saving');
+    }
+  };
+
   const handleSwap = () => {
     setDirection((prev) => (prev === 'ja-to-en' ? 'en-to-ja' : 'ja-to-en'));
     setSourceText(translatedText.replace(/<[^>]+>/g, '')); // strip tags for swap
@@ -144,9 +169,7 @@ export default function TranslatorCard() {
   const displaySource = isJaToEn ? addFurigana(sourceText) : sourceText;
 
   return (
-    <div className="...">
-      {' '}
-      {/* same card styles */}
+    <div className="bg-white-900/80 border-black-300/20 mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border shadow-xl backdrop-blur-sm">
       <div className="p-6 md:p-10">
         <DirectionToggle
           direction={direction}
@@ -210,6 +233,14 @@ export default function TranslatorCard() {
         </div>
 
         <div className="mt-8 flex flex-wrap justify-center gap-4 md:justify-end">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleSaveVocab}
+            disabled={!translatedText.trim()}
+          >
+            Save to Vocabulary
+          </Button>
           <Button
             variant="outline"
             size="md"
