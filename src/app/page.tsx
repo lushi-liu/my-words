@@ -20,8 +20,7 @@ export default function Home() {
 
         {/* Optional footer note */}
         <div className="text-14 text-white-500 mt-12 text-center">
-          Powered by Next.js + Tailwind CSS • Use DeepL / Google Translate / LLM
-          API in production
+          Powered by Next.js + Tailwind CSS
         </div>
       </div>
     </main>
